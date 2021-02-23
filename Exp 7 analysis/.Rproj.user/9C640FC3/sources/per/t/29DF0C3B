@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582890849165.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1858117429",
+    "id" : "29DF0C3B",
+    "lastKnownWriteTime" : 1583410883,
+    "last_content_update" : 1583410883170,
+    "path" : "C:/Users/beesleyt/OneDrive - Lancaster University/Desktop PC/Projects/Psychopathy/Exp 7 analysis/2_addAOI_combineResp_Exp7.R",
+    "project_path" : "2_addAOI_combineResp_Exp7.R",
+    "properties" : {
+        "cursorPosition" : "6,25",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

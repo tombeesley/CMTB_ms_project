@@ -1,0 +1,66 @@
+## @knitr trialAnalysis
+
+library(tidyverse)
+library(gridExtra)
+
+load("Exp_3_data.RData")
+data <- finalData
+
+# components common to all 3 graphs
+themeComponents <- list(scale_x_continuous(breaks = seq(2, 18, by = 2)), 
+                       geom_line(),
+                       geom_point(),
+                       theme_classic(),
+                       geom_vline(xintercept = c(6.5, 12.5), linetype = "dashed"))
+  
+
+# mean number of responses, by ICU
+resp_Graph <- data %>% 
+  group_by(ICU_medSplit,block) %>% 
+  summarise(resp = mean(numResp)) %>% 
+  ggplot(aes(x=block,y=resp, colour = ICU_medSplit)) +
+  themeComponents
+
+# time on outcomes stimuli, by ICU
+outEG_Graph <- data %>%
+  group_by(ICU_medSplit,block) %>% 
+  summarise(outEG = mean(AOI_out_2, na.rm=TRUE)) %>% 
+  ggplot(aes(x=block,y=outEG, colour = ICU_medSplit)) +
+  themeComponents
+  
+# time of cue on outcome stimulus, by ICU
+timeEG_Graph <- data %>% 
+  group_by(ICU_medSplit,block) %>% 
+  summarise(latency = mean(tOutFix, na.rm=TRUE)) %>% 
+  ggplot(aes(x=block,y = latency,colour= ICU_medSplit))+
+  themeComponents
+
+# present the graphs side by side
+grid.arrange(resp_Graph, outEG_Graph, timeEG_Graph, ncol = 2)
+
+
+# output data for analysis (for Caroline)
+
+# response data
+data %>% 
+  group_by(subj, ICU_medSplit,block) %>% 
+  summarise(resp = mean(numResp)) %>% 
+  pivot_wider(names_from = block, names_prefix = "B", values_from = resp) %>% 
+  arrange(ICU_medSplit) %>% 
+  write_csv("output_response_Exp3.csv")
+
+# time on outcome stimuli
+data %>%
+  group_by(subj, ICU_medSplit, block) %>% 
+  summarise(outEG = mean(AOI_out_2, na.rm=TRUE)) %>% 
+  pivot_wider(names_from = block, names_prefix = "B", values_from = outEG) %>% 
+  arrange(ICU_medSplit) %>% 
+  write_csv("output_outcome_Dur_Exp3.csv")
+
+data %>% 
+  group_by(subj, ICU_medSplit, block) %>% 
+  summarise(latency = mean(tOutFix, na.rm=TRUE)) %>% 
+  pivot_wider(names_from = block, names_prefix = "B", values_from = latency) %>% 
+  arrange(ICU_medSplit) %>% 
+  write_csv("output_outcome_Lat_Exp3.csv")
+  

@@ -1,0 +1,144 @@
+## @knitr viewFixations
+rm(list=ls())
+library(tidyverse)
+
+load("Exp_6_dataNEW.RData")
+
+# Define AOIs
+cueAOI = c(135,880,1785,1030)
+respAOI = c(135,600,1785,750)
+outAOI = c(135,50,1785,200)
+outAOI_cond2 = c(135,450,1785,600) # outcomes adjacent to response locations
+
+checkXYinAOI <- function(x,y,AOI) { # passes the function 3 variables: x,y,and AOI
+  return(x>=AOI[1] & y>=AOI[2] & x<=AOI[3] & y<=AOI[4]) # 
+}
+
+#createAOIcol is name of function // 
+# inArray is the passed dataframe
+#inAOI is the variable with which the function will be referred to the above defined AOIs (e.g. inAOI = fixAOI for centre)//
+#newColName is the variable needed for the mutate function to create new col(name)
+#checkXYinAOI is the function (see above) to check AOIs (not sure why x,y,inAOI is in brackets...)
+
+createAOIcol <- function(inArray, inAOI, newColName) { # passes the function 3 variables with which create columns to check if fixations were within the areas of interest (AOI)
+  inArray %>% mutate(!!newColName := checkXYinAOI(x,y,inAOI)) # dfs that function is passed through will mutate new column which contains another function that checks fixations for AOIs
+}
+
+#maps above functions to allData
+allEGData <- allEGData %>% 
+  map(~createAOIcol(., inAOI = cueAOI, newColName = 'AOI_cues')) %>%  
+  map(~createAOIcol(., inAOI = respAOI, newColName = 'AOI_resp')) %>% 
+  map(~createAOIcol(., inAOI = outAOI, newColName = 'AOI_out')) %>% 
+  map(~createAOIcol(., inAOI = outAOI_cond2, newColName = 'AOI_out_cond2'))
+
+#function to edit all arrays in AOIdf to only include columns necessary for identifying first/last fixations
+EditCols <- function(inArray) {
+  inArray %>% 
+    select(subj,trial,period,x,y,dur,periodLatency,starts_with('AOI')) %>%  #name of cols in AOIdf that should be selected
+    group_by(trial) %>% 
+    mutate(fixcount = 1:n()) %>% # fixcount column counting nr of fixations in a trial
+    arrange(trial) %>% 
+    group_by(trial,period) %>% 
+    mutate(fixcountP = 1:n())  %>% # fixcount column counting nr of fixations in a period
+    ungroup()
+  
+}
+
+allEGData <- map(allEGData, EditCols) # passes allEGdata through the EditCols to simplify and number the fixations per period
+
+
+trialFIXED = data.frame(trial=c(1:72)) #dataframe with 480 rows to merge with new cols below:
+
+# summed dwell time across trial 
+calcSummedDwellTime <- function(inArray) {
+  
+  outDF <- inArray %>% 
+    mutate(AOI_none = (AOI_cues==FALSE & AOI_resp==FALSE & AOI_out==FALSE & AOI_out_cond2==FALSE)) %>% 
+    mutate_at(vars(starts_with('AOI')), vars(dur*.)) %>% # this converts the TRUE/FALSE value in AOI cols into the duration (0 if FALSE)
+    group_by(trial,period) %>%
+    summarise_at(vars(starts_with('AOI')),sum) %>% # sum the columns across the period for each trial
+    pivot_wider(names_from = period, values_from = starts_with('AOI')) %>%  # pivot the 2 rows of period across one row, creating 4 new AOI variables
+    merge(trialFIXED,by = "trial", all = TRUE) %>% # apply a trial column which reflects 1:72, irrespective of eye-gaze present or not.
+    ungroup()
+  
+  return(outDF)
+  
+}
+
+trialEGDwell <- map(allEGData,calcSummedDwellTime) # apply the function over each element of the list (each subject)
+
+trialEGDwell <- do.call("rbind",trialEGDwell) # collapse the seperate lists into a single dataframe
+
+trialEGDwell <- select(trialEGDwell,-trial)
+
+# Condition 1 and 3
+# calculate time of first fixation on outcome during feedback
+timeFix1_Out_FB_c1_3 <- function(inArray){
+  
+  outDF <- inArray %>% 
+    filter(period == 2, AOI_out==TRUE) %>% 
+    group_by(subj,trial) %>% 
+    filter(fixcount==min(fixcount)) %>% 
+    merge(trialFIXED,by = "trial", all=TRUE) %>% 
+    select(subj,trial,timeFixtoOut_c1_3=periodLatency) %>% 
+    ungroup()
+  
+  return(outDF)
+}
+
+timeOutFix_c1and3 <- map(allEGData,timeFix1_Out_FB_c1_3)
+timeOutFix_c1and3 <- do.call("rbind",timeOutFix_c1and3)
+
+# Condition 2
+# calculate time of first fixation on outcome during feedback
+timeFix1_Out_FB_c2 <- function(inArray){
+  
+  outDF <- inArray %>% 
+    filter(period == 2, AOI_out_cond2==TRUE) %>% 
+    group_by(subj,trial) %>% 
+    filter(fixcount==min(fixcount)) %>% 
+    merge(trialFIXED,by = "trial", all=TRUE) %>% 
+    select(subj,trial,timeFixtoOut_c2=periodLatency) %>% 
+    ungroup()
+  
+  return(outDF)
+}
+
+timeOutFix_c2 <- map(allEGData,timeFix1_Out_FB_c2)
+timeOutFix_c2 <- do.call("rbind",timeOutFix_c2)
+
+# get subj numbers
+subNums <- distinct(timeOutFix_c2, subj)
+
+# at this stage the two dataframes will be the same length and unique variables
+# combine columns from EyeData and TrialData
+combinedData <- cbind(allResponseData, 
+                      trialEGDwell, 
+                      tOutFix_c1and3=timeOutFix_c1and3$timeFixtoOut_c1_3,
+                      tOutFix_c2=timeOutFix_c2$timeFixtoOut_c2)
+
+
+
+# make new variables
+finalData <- combinedData %>% 
+  mutate(phase = ceiling(trial/24),block=ceiling(trial/4)) %>%
+  separate(subj, into = c("condition", "subj"), sep = "_", extra = "merge") %>% 
+  mutate(AOI_out_1 = if_else(condition == "C2", AOI_out_cond2_1, AOI_out_1), # combines the variables for conditions 1,2,3
+         AOI_out_2 = if_else(condition == "C2", AOI_out_cond2_2, AOI_out_2), # combines the variables for conditions 1,2,3
+         tOutFix = if_else(condition == "C2", tOutFix_c2, tOutFix_c1and3)) %>% # combines the variables for conditions 1,2,3
+  select(-AOI_out_cond2_1, -AOI_out_cond2_2, -tOutFix_c1and3, -tOutFix_c2) %>% # removes individual variables associated with conditions 1,2,3
+  select(subj,condition,age,sex,phase,block,trial:tOutFix)
+
+# add cu traits from CSV file
+cu_traits <- read_csv('Exp6_CU.csv') %>% 
+  mutate(subj = str_c("P", ID, "_Exp6")) %>%# make subj column compatible with the other dataframe
+  select(subj, ICU) # order variables
+
+finalData <- finalData %>% 
+  left_join(cu_traits, by = 'subj') %>% # merge cu values with final dataframe
+  mutate(ICU_medSplit = factor(ICU<=median(ICU, na.rm = TRUE))) %>% # make a medium split factor - ICU data is missing from one participant
+  mutate(ICU_medSplit = recode_factor(ICU_medSplit, "TRUE"="Low","FALSE"="High")) # recode that factor to levels "High" and "Low"
+
+write_csv(finalData, "Exp_6_proc_data.csv")
+
+

@@ -1,0 +1,88 @@
+library(tidyverse)
+library(tidyr)
+library(cgwtools)
+trialFIXED = data.frame(trial=c(1:72)) #dataframe with 480 rows to merge with new cols below:
+
+# summed dwell time across trial 
+calcSummedDwellTime <- function(inArray) {
+  
+  outDF <- inArray %>% 
+    mutate(AOI_none = (AOI_cues==FALSE & AOI_resp==FALSE & AOI_out==FALSE & AOI_out_cond2==FALSE)) %>% 
+    mutate_at(vars(starts_with('AOI')), vars(dur*.)) %>% # this converts the TRUE/FALSE value in AOI cols into the duration (0 if FALSE)
+    group_by(trial,period) %>%
+    summarise_at(vars(starts_with('AOI')),sum) %>% # sum the columns across the period for each trial
+    pivot_wider(names_from = period, values_from = starts_with('AOI')) %>%  # pivot the 2 rows of period across one row, creating 4 new AOI variables
+    merge(trialFIXED,by = "trial", all = TRUE) %>% # apply a trial column which reflects 1:72, irrespective of eye-gaze present or not.
+    ungroup()
+    
+  return(outDF)
+
+}
+
+trialEGDwell <- map(allEGData,calcSummedDwellTime) # apply the function over each element of the list (each subject)
+
+trialEGDwell <- do.call("rbind",trialEGDwell) # collapse the seperate lists into a single dataframe
+
+trialEGDwell <- select(trialEGDwell,-trial)
+
+# Condition 1 and 3
+# calculate time of first fixation on outcome during feedback
+timeFix1_Out_FB_c1_3 <- function(inArray){
+  
+  outDF <- inArray %>% 
+    filter(period == 2, AOI_out==TRUE) %>% 
+    group_by(subj,trial) %>% 
+    filter(fixcount==min(fixcount)) %>% 
+    merge(trialFIXED,by = "trial", all=TRUE) %>% 
+    select(subj,trial,timeFixtoOut_c1_3=periodLatency) %>% 
+    ungroup()
+    
+  return(outDF)
+}
+
+timeOutFix_c1and3 <- map(allEGData,timeFix1_Out_FB_c1_3)
+timeOutFix_c1and3 <- do.call("rbind",timeOutFix_c1and3)
+
+# Condition 2
+# calculate time of first fixation on outcome during feedback
+timeFix1_Out_FB_c2 <- function(inArray){
+  
+  outDF <- inArray %>% 
+    filter(period == 2, AOI_out_cond2==TRUE) %>% 
+    group_by(subj,trial) %>% 
+    filter(fixcount==min(fixcount)) %>% 
+    merge(trialFIXED,by = "trial", all=TRUE) %>% 
+    select(subj,trial,timeFixtoOut_c2=periodLatency) %>% 
+    ungroup()
+  
+  return(outDF)
+}
+
+timeOutFix_c2 <- map(allEGData,timeFix1_Out_FB_c2)
+timeOutFix_c2 <- do.call("rbind",timeOutFix_c2)
+
+# get subj numbers
+subNums <- distinct(timeOutFix_c2, subj)
+
+# at this stage the two dataframes will be the same length and unique variables
+# combine columns from EyeData and TrialData
+combinedData <- cbind(allResponseData, 
+                      trialEGDwell, 
+                      tOutFix_c1and3=timeOutFix_c1and3$timeFixtoOut_c1_3,
+                      tOutFix_c2=timeOutFix_c2$timeFixtoOut_c2)
+
+# make new variables
+finalData <- combinedData %>% 
+  mutate(phase = ceiling(trial/24),block=ceiling(trial/4)) %>%
+  separate(subj, into = c("condition", "subj"), sep = "_", extra = "merge") %>% 
+  select(subj,condition,age,sex,phase,block,trial:tOutFix_c2) 
+  
+# add cu traits from CSV file
+cu_traits <- read_csv('Exp6_CU.csv')
+colnames(cu_traits)[1] <- 'subj' # change 'ID' to 'subj'
+
+finalData <- finalData %>% merge(cu_traits, by = 'subj') %>% # merge cu values with final dataframe
+  mutate(ICU_medSplit = factor(ICU<=median(ICU))) %>% # make a medium split factor
+  mutate(ICU_medSplit = recode_factor(ICU_medSplit, "TRUE"="Low","FALSE"="High")) # recode that factor to levels "High" and "Low"
+
+write_csv(finalData, "Exp_6_proc_data.csv")

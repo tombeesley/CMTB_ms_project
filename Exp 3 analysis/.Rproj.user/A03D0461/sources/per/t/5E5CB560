@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582750195850.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "5E5CB560",
+    "lastKnownWriteTime" : 8104338726696264226,
+    "last_content_update" : 1582750195850,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "E4A55F7F",
+        "caption" : "timeOutFix",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=timeOutFix&cache_key=E4A55F7F",
+        "displayedObservations" : 3312,
+        "environment" : "",
+        "expression" : "timeOutFix",
+        "object" : "timeOutFix",
+        "preview" : 0,
+        "totalObservations" : 3312,
+        "variables" : 3
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

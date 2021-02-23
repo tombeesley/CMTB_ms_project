@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1572296744345.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3262822378",
+    "id" : "86F0313F",
+    "lastKnownWriteTime" : 1580847343,
+    "last_content_update" : 1580847343,
+    "path" : "C:/Users/beesleyt/OneDrive - Lancaster University/Desktop PC/Projects/Psychopathy/Exp 3 analysis/4_trialAnalysis.R",
+    "project_path" : "4_trialAnalysis.R",
+    "properties" : {
+        "cursorPosition" : "41,34",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

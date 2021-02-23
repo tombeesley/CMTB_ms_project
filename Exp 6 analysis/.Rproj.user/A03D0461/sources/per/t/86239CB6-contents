@@ -1,0 +1,73 @@
+## @knitr viewFixations
+rm(list=ls())
+library(tidyverse)
+
+load("Exp_6_data.RData")
+
+# Define AOIs
+cueAOI = c(135,880,1785,1030)
+respAOI = c(135,600,1785,750)
+outAOI = c(135,50,1785,200)
+outAOI_cond2 = c(135,450,1785,600) # outcomes adjacent to response locations
+
+checkXYinAOI <- function(x,y,AOI) { # passes the function 3 variables: x,y,and AOI
+  return(x>=AOI[1] & y>=AOI[2] & x<=AOI[3] & y<=AOI[4]) # 
+}
+
+#createAOIcol is name of function // 
+# inArray is the passed dataframe
+#inAOI is the variable with which the function will be referred to the above defined AOIs (e.g. inAOI = fixAOI for centre)//
+#newColName is the variable needed for the mutate function to create new col(name)
+#checkXYinAOI is the function (see above) to check AOIs (not sure why x,y,inAOI is in brackets...)
+
+createAOIcol <- function(inArray, inAOI, newColName) { # passes the function 3 variables with which create columns to check if fixations were within the areas of interest (AOI)
+  inArray %>% mutate(!!newColName := checkXYinAOI(x,y,inAOI)) # dfs that function is passed through will mutate new column which contains another function that checks fixations for AOIs
+}
+
+#maps above functions to allData
+allEGData <- allEGData %>% 
+  map(~createAOIcol(., inAOI = cueAOI, newColName = 'AOI_cues')) %>%  
+  map(~createAOIcol(., inAOI = respAOI, newColName = 'AOI_resp')) %>% 
+  map(~createAOIcol(., inAOI = outAOI, newColName = 'AOI_out')) %>% 
+  map(~createAOIcol(., inAOI = outAOI_cond2, newColName = 'AOI_out_cond2'))
+
+#function to edit all arrays in AOIdf to only include columns necessary for identifying first/last fixations
+EditCols <- function(inArray) {
+  inArray %>% 
+    select(subj,trial,period,x,y,dur,periodLatency,starts_with('AOI')) %>%  #name of cols in AOIdf that should be selected
+    group_by(trial) %>% 
+    mutate(fixcount = 1:n()) %>% # fixcount column counting nr of fixations in a trial
+    arrange(trial) %>% 
+    group_by(trial,period) %>% 
+    mutate(fixcountP = 1:n())  %>% # fixcount column counting nr of fixations in a period
+    ungroup()
+  
+}
+
+allEGData <- map(allEGData, EditCols) # passes allEGdata through the EditCols to simplify and number the fixations per period
+
+
+# 
+# # visualise the fixations over AOIs
+# viewFixations <- function(inEG, inAOIs, screen) {
+#   
+#   colnames(inAOIs) <- c('Left','Top','Right','Bottom') # rename AOI coordinate variables
+#   
+#   graphFix <- ggplot() +
+#     geom_rect(data=inAOIs, aes(xmin=Left,ymin=Top,xmax=Right,ymax=Bottom, fill="red", alpha = 0.1)) + # AOI rectangles
+#     geom_point(data=inEG, aes(x = x, y = y, size=dur)) + # fixations, size is controlled by duration
+#     scale_x_continuous(limits=c(0,screen[1]),breaks=seq(0,screen[1],screen[1]/10)) + # set x axis
+#     scale_y_reverse(limits=c(screen[2],0),breaks=seq(screen[2],0,-screen[2]/10)) + # set a reverse y axis, so 0 is at the top.
+#     guides(fill=FALSE, alpha=FALSE) # turn off legend for these factors.
+#   
+#   return(graphFix)
+#   
+# }
+# 
+# screenWH <- c(1920,1080) # screen size, for setting axis
+# AOIs <- data.frame(rbind(cueAOI,respAOI,outAOI)) # combine the 3 areas of interest into a dataframe
+# subEG <- data.frame(allEGData[1]) %>% filter(trial==10) %>% select(x,y,dur) # select the coordinates of some fixations (change as needed)
+# 
+# viewFixations(subEG,AOIs,screenWH) # run the function - behold the pretty graph!
+
+

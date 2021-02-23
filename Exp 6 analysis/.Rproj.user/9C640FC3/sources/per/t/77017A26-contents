@@ -1,0 +1,108 @@
+## @knitr viewFixations
+
+library(tidyverse)
+
+load("Exp_7_data.RData")
+
+# Define AOIs - same as Exp 3 and 5
+cueAOI = c(235,780,1685,1030)
+respAOI = c(235,400,1685,650)
+outAOI = c(235,50,1685,300)
+
+checkXYinAOI <- function(x,y,AOI) { # passes the function 3 variables: x,y,and AOI
+  return(x>=AOI[1] & y>=AOI[2] & x<=AOI[3] & y<=AOI[4]) # 
+}
+
+
+#createAOIcol is name of function // 
+# inArray is the passed dataframe
+#inAOI is the variable with which the function will be referred to the above defined AOIs (e.g. inAOI = fixAOI for centre)//
+#newColName is the variable needed for the mutate function to create new col(name)
+#checkXYinAOI is the function (see above) to check AOIs (not sure why x,y,inAOI is in brackets...)
+
+createAOIcol <- function(inArray, inAOI, newColName) { # passes the function 3 variables with which create columns to check if fixations were within the areas of interest (AOI)
+  inArray %>% mutate(!!newColName := checkXYinAOI(x,y,inAOI)) # dfs that function is passed through will mutate new column which contains another function that checks fixations for AOIs
+}
+
+
+#maps above functions to allData
+allEGData <- allEGData %>% 
+  map(~createAOIcol(., inAOI = cueAOI, newColName = 'AOI_cues')) %>%  
+  map(~createAOIcol(., inAOI = respAOI, newColName = 'AOI_resp')) %>% 
+  map(~createAOIcol(., inAOI = outAOI, newColName = 'AOI_out'))
+
+#function to edit all arrays in AOIdf to only include columns necessary for identifying first/last fixations
+EditCols <- function(inArray) {
+  inArray %>% 
+    select(subj,trial,period,x,y,dur,periodLatency,starts_with('AOI')) %>%  #name of cols in AOIdf that should be selected
+    group_by(trial) %>% 
+    mutate(fixcount = 1:n()) %>% # fixcount column counting nr of fixations in a trial
+    arrange(trial) %>% 
+    group_by(trial,period) %>% 
+    mutate(fixcountP = 1:n())  # fixcount column counting nr of fixations in a period
+  
+}
+
+allEGData <- map(allEGData, EditCols) # passes AOIdf through the EditCols to simplify and number the fixations per period
+
+trialFIXED = data.frame(trial=c(1:72)) #dataframe with 480 rows to merge with new cols below:
+
+# summed dwell time across trial 
+calcSummedDwellTime <- function(inArray) {
+  
+  outDF <- inArray %>% 
+    mutate(AOI_none = (AOI_cues==FALSE & AOI_resp==FALSE & AOI_out==FALSE)) %>% 
+    mutate_at(vars(starts_with('AOI')), vars(dur*.)) %>% # this converts the TRUE/FALSE value in AOI cols into the duration (0 if FALSE)
+    group_by(trial,period) %>%
+    summarise_at(vars(starts_with('AOI')),sum) %>% # sum the columns across the period for each trial
+    pivot_wider(names_from = period, values_from = starts_with('AOI')) %>%  # pivot the 2 rows of period across one row, creating 4 new AOI variables
+    merge(trialFIXED,by = "trial", all = TRUE) # apply a trial column which reflects 1:72, irrespective of eye-gaze present or not.
+  
+  return(outDF)
+  
+}
+
+trialEGDwell <- map(allEGData,calcSummedDwellTime) # apply the function over each element of the list (each subject)
+
+trialEGDwell <- do.call("rbind",trialEGDwell) # collapse the seperate lists into a single dataframe
+
+trialEGDwell <- select(trialEGDwell,-trial)
+
+
+# calculate time of first fixation on outcome during feedback
+timeFix1_Out_FB <- function(inArray){
+  
+  outDF <- inArray %>% 
+    filter(period == 2, AOI_out==TRUE) %>% 
+    group_by(subj,trial) %>% 
+    filter(fixcount==min(fixcount)) %>% 
+    merge(trialFIXED,by = "trial", all=TRUE) %>% 
+    select(subj,trial,timeFixtoOut=periodLatency)
+  
+  return(outDF)
+}
+
+timeOutFix <- map(allEGData,timeFix1_Out_FB)
+timeOutFix <- do.call("rbind",timeOutFix)
+
+# at this stage the two dataframes will be the same length and unique variables
+# combine columns from EyeData and TrialData
+combinedData <- cbind(allResponseData, trialEGDwell, tOutFix=timeOutFix$timeFixtoOut)
+
+finalData <- combinedData %>% 
+  mutate(phase = ceiling(trial/24),block=ceiling(trial/4)) %>% 
+  select(subj:sex,phase,block,trial:tOutFix)
+
+# add cu traits from CSV file
+cu_traits <- read_csv('Exp7_CU.csv') %>% 
+  mutate(subj = str_c("P", subj, "_Exp7")) %>% # make subj column compatible with the other dataframe
+  select(subj, ICU) # order variables
+
+finalData <- finalData %>% 
+  left_join(cu_traits, by = 'subj') %>% # merge cu values with final dataframe
+  mutate(ICU_medSplit = factor(ICU<=median(ICU))) %>% # make a medium split factor
+  mutate(ICU_medSplit = recode_factor(ICU_medSplit, "TRUE"="Low","FALSE"="High")) # recode that factor to levels "High" and "Low"
+
+write_csv(finalData, "Exp_7_proc_data.csv")
+
+

@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1583147146682.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "9B5F84F0",
+    "lastKnownWriteTime" : 30399714103787617,
+    "last_content_update" : 1583147146682,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "9B47A421",
+        "caption" : "trialEGDwell",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=trialEGDwell&cache_key=9B47A421",
+        "displayedObservations" : 3312,
+        "environment" : "",
+        "expression" : "trialEGDwell",
+        "object" : "trialEGDwell",
+        "preview" : 0,
+        "totalObservations" : 3312,
+        "variables" : 9
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

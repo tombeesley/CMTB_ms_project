@@ -1,0 +1,33 @@
+{
+    "id": "81C215A0",
+    "path": null,
+    "project_path": null,
+    "type": "r_dataframe",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1583933931237.0,
+    "source_on_save": false,
+    "relative_order": 5,
+    "properties": {
+        "expression": "allEGData",
+        "caption": "allEGData",
+        "totalObservations": "48168",
+        "displayedObservations": "48168",
+        "variables": "14",
+        "cacheKey": "7E296214",
+        "object": "allEGData",
+        "environment": "",
+        "contentUrl": "grid_resource/gridviewer.html?env=&obj=allEGData&cache_key=7E296214&max_cols=50",
+        "preview": "0",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 15199880674279490,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1583933931237,
+    "read_only": false,
+    "read_only_alternatives": []
+}

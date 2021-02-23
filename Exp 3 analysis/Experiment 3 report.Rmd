@@ -1,0 +1,96 @@
+---
+title: "Exp 3 Report"
+author: "Tom Beesley"
+date: "23/10/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::read_chunk('1_Raw2Saccades.R')
+knitr::read_chunk('2_generateAOIcols.R')
+knitr::read_chunk('4_trialAnalysis.R')
+```
+Data files have been converted to a "flat" CSV format for each participant. There are two data files relating to eye data over the two periods ("dec" and "fb"), and one related to response data ("trialData"). Participant numbers were converted into a 3 digit format. 
+
+## Extracting fixations from eye-gaze
+
+Raw eye-gaze data have been minimally processed: validity of each sample was assessed, selecting valid eyes on a per-sample basis where one was missing, otherwise averaging the X/Y for the two eyes. No interpolation has been performed on the data at this stage.
+
+The raw CSV EG files contain 4 values: sample time, X, Y, trial number.
+
+The program **"1_Raw2Saccades.R"** is used to pass the raw data through the saccades analysis package. This package, available at: https://github.com/tmalsburg/saccades
+
+*An R package for detection of saccades, fixations, and blinks in eyetracking data. It uses the velocity-based algorithm for saccade detection proposed by Ralf Engbert and Reinhold Kliegl (Vision Research, 2003). Any period occurring between two saccades is considered to be a fixation or a blink. Blink detection is done with a simple heuristic (when the spatial dispersion is close to zero, it’s likely a blink). Anything that doesn’t look like a saccade, fixation, or blink, is categorized as one out of multiple types of artifacts.*
+
+We use the "detect.fixations()" function to find the fixations for each trial and period within the data.
+
+```{r detect.fixations, eval = FALSE}
+# process fixations from the raw X/Y coordinates
+periodFix <- subset(detect.fixations(periodRaw), event=="fixation") 
+```
+
+The data are combined into one large array, containing all the fixations for all participants across all trials and periods. Running the script is time-consuming; the resulting dataframes, "allEGData" and "allResponseData", are saved as file "Exp_3_data.RData" at the end of the script. We can then just load this to avoid the lengthy processing time. A sample of allData is shown below:
+
+```{r demo all data}
+load("Exp_3_data.RData")
+head(data.frame(allEGData[1])) # head() shows the first few rows
+
+```
+
+## Assessing fixations on AOIs 
+
+The second analysis script, **"2_generateAOIcols.R"**, assesses each fixation in turn against the Areas of Interest (AOIs), which are set at the top of the script. Currently we have defined 3 AOIs, representing the regions of the cue (giver), responses (presents), and outcomes (receiver). The creates new columns (cues,resp,out) that state TRUE or FALSE whether the fixation was in the particular AOI. The fixation array is then simplified to relevant variables for future processing: subj,trial,period,x,y,dur,cues,resp,out. 
+
+At the end of this step there is a function that will allow you to view fixations over the AOIs:
+
+```{r viewFixations, include=FALSE, warning=FALSE}
+
+```
+Here's all the fixations for participant 1, first 50 trials
+```{r, warning=FALSE, fig.height=3, fig.width=5}
+subEG <- data.frame(allEGData[1]) %>% filter(trial<=50) %>% select(x,y,dur)
+viewFixations(subEG,AOIs,screenWH)
+```
+
+And the same data but split by period (decision, left; feedback, right)
+
+```{r, echo = FALSE, message=FALSE, warning=FALSE, fig.height=3, fig.width=10}
+library(gridExtra)
+subEG <- data.frame(allEGData[1]) %>% filter(trial<=50, period==1) %>% select(x,y,dur)
+decGraph <- viewFixations(subEG,AOIs,screenWH)
+subEG <- data.frame(allEGData[1]) %>% filter(trial<=50, period==2) %>% select(x,y,dur)
+fbGraph <- viewFixations(subEG,AOIs,screenWH)
+grid.arrange(decGraph,fbGraph, ncol=2)
+```
+
+## Obtaining the trial level dataframe
+
+The third script in the analysis process reduces the data down to the level of individual trials. Firstly, a new column is created to reflect when a fixation was not on any of the specified AOI. We then convert these boolean values into the duration of that fixation, before summing those durations across each period, within each trial. The period variable is then removed, expanding the 4 AOIs into 8, where each column is appended with the number 1 or 2, to reflect the two periods (decision, feedback), e.g., "AOI_cue_1". We merge the data with a fixed order of the 72 trials (1:72), since there are some trials where there are no fixations detected. The final expanded array is therefore length of 72*(N=46).
+
+The second step in this script is to analyse the timing of the first fixation to the outcome AOI during the feedback period. We take the original dataframe of "allEGdata", because this has saccades listed in order. We then filter to just period 2, and where the fixation was on the outcome AOI. Then on a subject and trial basis, we assess the first of these fixations "(min(fixcount))". The dataframe is again merged with the trial order and simplified to just subject number, trial number, and latency value.
+
+At this stage we combine together all of the trial level dataframes: the data from "allRepsonseData" (responses), "trialEGdata" (trial level EG data), and the latencies from the "timeOutFix" (latency of first fixation on the outcomes during feedback).
+
+The final step is to import the "CU Traits" datafile which contains the measurement on the ICU scale, and add that to the dataframe. In addition to the raw score, a median split column (factor) is added, with levels "low" and "high". 
+
+This dataframe is named "finalData" and is appended to the "Exp_3_data.RData" file.
+
+## Trial level analysis
+The following figures show the data split my median value on the ICU, for responses, fixation time on the outcomes during the feedback period, and the latency of the first fixation on outcomes during that period.
+```{r trialAnalysis, include=FALSE}
+
+```
+```{r, echo = FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=10}
+grid.arrange(resp_Graph, outEG_Graph, timeEG_graph, ncol = 2)
+```
+
+
+
+
+
+
+
+
+
+

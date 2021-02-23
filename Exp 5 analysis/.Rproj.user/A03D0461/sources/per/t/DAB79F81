@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582715522650.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "DAB79F81",
+    "lastKnownWriteTime" : 1582715313,
+    "last_content_update" : 1582715522650,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "62C773F6",
+        "caption" : "cu_traits",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=cu_traits&cache_key=62C773F6",
+        "displayedObservations" : 50,
+        "environment" : "",
+        "expression" : "cu_traits",
+        "object" : "cu_traits",
+        "preview" : 0,
+        "totalObservations" : 50,
+        "variables" : 2
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 6,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

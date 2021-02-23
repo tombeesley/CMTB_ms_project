@@ -1,0 +1,71 @@
+## @knitr Process_Raw_to_Saccades
+
+rm(list=ls())
+library(tidyverse)
+library(saccades)
+library(zoo)
+
+patternTypes <- c("dec","fb") #variable that differentiates between the 2 different csv files for the different experimental periods
+
+fnams <- list.files("Exp 6 Raw Data CSV", pattern = "dec", full.names = TRUE) # needed for reading data
+
+allEGData <- NULL # empty array to fill with processed data from all participants' raw data
+allResponseData <- NULL
+
+for (s in 1:length(fnams)) { # telling it to run through all the "fix" period files in the raw data file
+  
+  # creates variable to extract file name (counting backwards from file name characters to get participant number)
+  subNum <- substr(fnams[s], start = nchar(fnams[s])-15, stop = nchar(fnams[s])-4)
+  subFiles <- list.files("Exp 6 Raw Data CSV", pattern = subNum, full.names = TRUE) # needed for reading data
+  
+  subData <- NULL 
+  print(subNum)
+  
+  for (p in 1:2) { #for loop that goes through all files pertaining to periods "dec","fb"
+    
+    print(p)
+    
+    curFile <- subFiles[str_detect(subFiles,pattern=patternTypes[p])] #variable that detects files of the relevant period (dec,fb)
+    
+    periodRaw <- read_csv(curFile, col_types = cols(), col_names = FALSE) # read the data from csv
+    colnames(periodRaw) <- c("time","x","y","trial")
+    periodRaw <- periodRaw %>% 
+      mutate_at(vars(x,y), na.spline, maxgap = 25) %>% # interpolate
+      mutate_at(vars(x,y), .funs = ~ ifelse(. == "NaN", 0, .))
+    
+    startTimes <- periodRaw %>% 
+      group_by(trial) %>% 
+      summarise(startTime=min(time)) # this gets the time of the first sample in each period
+    
+    ## ---- run_saccades_program
+    
+    periodFix <- subset(detect.fixations(periodRaw), event=="fixation") # extract those fixations
+    
+    period <- rep(p,nrow = periodFix) # generates an array that matches same nr of rows as 'periodFix' and adds an extra 'period' column
+    subj <- rep(subNum,nrow = periodFix) # generates an array that matches same nr of rows as 'periodFix' and adds 'subject nr' column
+    
+    periodFix <- cbind(subj,period,periodFix) # overwrites 'saccades' periodFix by combining existing periodFix with subject nr col and period col
+    
+    periodFix <- merge(startTimes,periodFix, by = "trial") # add the startTimes column to periodFix
+    
+    subData <- rbind(subData,periodFix) 
+    
+  }
+  
+  subData <- subData %>% mutate(periodLatency = start-startTime) %>% # work out fixation latency from start of period.
+    select(subj,trial,period,startTime,start,end,dur,periodLatency,x:peak.vy) # reorder the columns
+  
+  allEGData[[s]] <- subData
+  
+  curFile <- subFiles[str_detect(subFiles,pattern="trial")] # detect trial data file
+  respData <- read_csv(curFile, col_types = cols(X3 = col_character()), col_names = FALSE) # read the data from csv
+  respData$X1 <- subNum #replace the subNum with the complete one from the file name
+  allResponseData <- rbind(allResponseData,respData) # great large dataframe
+  
+}
+
+# rename variables, recode sex variable values for consistency
+colnames(allResponseData) <- c("subj","age","sex","trial","cue","resp","out","numResp","RT")
+allResponseData$sex <- recode(allResponseData$sex, 'f' = "F", 'm' = "M")
+
+save(list=c("allEGData", "allResponseData"), file="Exp_6_data.RData")

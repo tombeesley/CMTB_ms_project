@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582906387634.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1512571777",
+    "id" : "2657C4E0",
+    "lastKnownWriteTime" : 1583412957,
+    "last_content_update" : 1583412957351,
+    "path" : "C:/Users/beesleyt/OneDrive - Lancaster University/Desktop PC/Projects/Psychopathy/Exp 6 analysis/2_addAOI_combineResp_Exp6.R",
+    "project_path" : "2_addAOI_combineResp_Exp6.R",
+    "properties" : {
+        "cursorPosition" : "138,108",
+        "scrollLine" : "100"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,33 @@
+{
+    "id": "2DF96DB2",
+    "path": null,
+    "project_path": null,
+    "type": "r_dataframe",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1583935397630.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "expression": "TLd",
+        "caption": "TLd",
+        "totalObservations": 3302,
+        "displayedObservations": 3302,
+        "variables": 10,
+        "cacheKey": "7FE12FA2",
+        "object": "TLd",
+        "environment": "",
+        "contentUrl": "grid_resource/gridviewer.html?env=&obj=TLd&cache_key=7FE12FA2&max_cols=50",
+        "preview": 0,
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 8224171303589212281,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1583935397630,
+    "read_only": false,
+    "read_only_alternatives": []
+}

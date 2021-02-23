@@ -1,0 +1,730 @@
+---
+title: "Exp 3,5,6,7 - Writeup"
+author: "Tom Beesley"
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+date_compiled_title = c("PDF created on", date())
+```
+---
+date: `r date_compiled_title`
+---
+
+```{r, include = FALSE}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(broom)
+library(patchwork)
+
+theme_set(theme_classic())
+
+data_exp3 <- read_csv("../Exp 3 analysis/Exp_3_proc_data.csv")
+data_exp5 <- read_csv("../Exp 5 analysis/Exp_5_proc_data.csv")
+data_exp5_1s <- read_csv("../Exp 5 analysis/Exp_5_proc_data_1s.csv")
+data_exp6 <- read_csv("../Exp 6 analysis/Exp_6_proc_data.csv")
+data_exp6_1s <- read_csv("../Exp 6 analysis/Exp_6_proc_data_1s.csv")
+data_exp7 <- read_csv("../Exp 7 analysis/Exp_7_proc_data.csv")
+
+#combine the two Experiment 5 dataframes together
+data_exp5_1s <- data_exp5_1s %>% 
+  select(subj, 
+         trial,
+         AOI_cue_p2_1s = AOI_cue_p2,
+         AOI_resp_p2_1s = AOI_resp_p2,
+         AOI_out_p2_1s = AOI_out_p2,
+         tOutFix_1s = tOutFix) 
+
+data_exp5 <- data_exp5 %>% 
+  inner_join(data_exp5_1s, by = c("subj", "trial"))
+
+#combine the two Experiment 6 dataframes together
+data_exp6_1s <- data_exp6_1s %>% 
+  select(subj, 
+         trial,
+         AOI_cue_p2_1s = AOI_cue_p2,
+         AOI_resp_p2_1s = AOI_resp_p2,
+         AOI_out_p2_1s = AOI_out_p2,
+         tOutFix_1s = tOutFix) 
+
+data_exp6 <- data_exp6 %>% 
+  inner_join(data_exp6_1s, by = c("subj", "trial"))
+
+# combine the data together
+data <- bind_rows(data_exp3, data_exp5, data_exp6, data_exp7) %>% 
+  mutate(Experiment = str_sub(subj, str_length(subj)-3, str_length(subj))) %>%  
+  select(Experiment, subj, condition, everything())
+
+# create new ICU split variable based on ICU scores across all experiments
+data <- data %>% 
+  mutate(ICU_Exp_medSplit = ICU_medSplit, # this is the original split variable, now called "_Exp_medSplit"
+         ICU_medSplit = if_else(ICU > median(ICU, na.rm = TRUE),
+                                true = "High",
+                                false = "Low"))
+
+```
+
+# Data quality and eye-gaze processing analysis
+
+Here are the demographic statistics from the 4 experiments:
+
+```{r}
+# summary demographics by experiment
+data_demog_summary <- data %>% 
+  group_by(subj) %>% 
+  slice(1) %>% 
+  group_by(Experiment) %>% 
+  summarise(num_Ps = n_distinct(subj),
+            num_Females = sum(sex=="F"),
+            num_Males = sum(sex=="M"),
+            mean_Age = round(mean(age, na.rm = TRUE),1), # note there is one NA for age in Exp 6
+            min_Age = min(age, na.rm = TRUE), # note there is one NA for age in Exp 6
+            max_Age = max(age, na.rm = TRUE),
+            ICU_mean = mean(ICU, na.rm = TRUE),
+            ICU_median = median(ICU, na.rm = TRUE),
+            ICU_min = min(ICU, na.rm = TRUE),
+            ICU_max = max(ICU, na.rm = TRUE)) # note there is one NA for age in Exp 6
+
+# show as table 
+data_demog_summary %>%   
+  kable(digits = 1) %>% 
+  row_spec(0,bold=TRUE) %>%
+  kable_styling(position = "left")
+
+# write to csv
+data_demog_summary %>% write_csv("data_demog_summary.csv")
+
+# get subject level data
+data %>% 
+  group_by(subj) %>% 
+  slice(1) %>%
+  select(Experiment, subj, condition, age, sex, ICU) %>% 
+  arrange(Experiment, subj) %>% 
+  write_csv("data_demog_Ps.csv")
+
+
+
+```
+&nbsp;
+
+Here are some statistics on the number of samples and number of missing samples before and after the interpolation process (patching up of eye-gaze samples):
+
+```{r}
+# what proportion of raw and repaired EG data is missing, per period and experiment
+dataQuality <- data %>%
+  select(Experiment, subj, condition, trial, samples_p1:post_interp_NA_p2) %>% 
+  mutate(p1_pre = raw_NA_p1/samples_p1*100,
+         p1_post = post_interp_NA_p1/samples_p1*100,
+         p2_pre = raw_NA_p2/samples_p2*100,
+         p2_post = post_interp_NA_p2/samples_p2*100) 
+
+dataQuality %>% 
+  group_by(Experiment) %>% 
+  summarise_at(vars(samples_p1:post_interp_NA_p2), mean) %>% 
+  rename("interp_NA_p1" = "post_interp_NA_p1",
+         "interp_NA_p2" = "post_interp_NA_p2") %>% 
+  select(Experiment, contains("p1"), contains("p2")) %>% 
+  kable(digits = 1) %>% 
+  kable_styling(position = "left")
+
+```
+&nbsp;
+
+From the "samples_p1" column it looks like the sample rate was set lower in Experiment 7 compared to the others (decision time should not be shorter in this experiment). Also we see here the restricted time for the feedback period in Exp3 and Exp7 (samples_p2). 
+
+Looking at the proportion of missing data (across periods) for the individual participants, we can see considerable variability both within and across the experiments. We can see how the interpolation of the raw eye-data reduces considerably the amount of missing data: 
+
+```{r, fig.height= 4, fig.width=6}
+# distribution of NA in data by pre- and post-interpolation, for the two periods, across Experiments
+dataQuality %>% 
+  group_by(Experiment,subj) %>% 
+  summarise_at(vars(p1_pre:p2_post), mean) %>% 
+  pivot_longer(cols = p1_pre:p2_post, names_to = "period", values_to = "prop_NA") %>%
+  mutate(period = str_replace_all(period, c("p1" = "Dec", "p2" = "FB"))) %>% 
+  mutate(period = fct_relevel(period, "Dec_pre", "Dec_post", "FB_pre", "FB_post")) %>% 
+  ggplot(aes(x = Experiment, y = prop_NA)) +
+  geom_violin()+
+  geom_jitter(width = .2, size = .3) +
+  facet_wrap(~period) +
+  labs(title = "The proportion of missing data pre- and post-interpolation",
+       y = "Proportion of data that is NA",
+       x = "")
+```
+
+Experiment 7 looks a bit unusual post-interpolation. If the sample rate was lower, then the interpolation process might have had a rather dramatic effect, reducing considerably the proportion of NAs. We can look at the **number of fixations** to see if there's anything unusual there too:
+
+```{r}
+# how many fixations did we see in each period?
+data %>% 
+  group_by(Experiment, subj) %>% 
+  summarise(p1 = mean(nFix_p1, na.rm = TRUE),
+            p2 = mean(nFix_p2, na.rm = TRUE)) %>% 
+  group_by(Experiment) %>% 
+  summarise(Dec = mean(p1),
+            FB = mean(p2)) %>% 
+  kable(digits = 1) %>% 
+  row_spec(0,bold=TRUE) %>%
+  kable_styling(position = "left")
+
+```
+&nbsp;
+
+It does seem that Experiment 7 had fewer fixations in the decision period compared to the others. The shorter feedback time means there were also fewer in the feedback period too, and notably less than Experiment 3. Again, it's likely the lower sample rate has led to fewer fixations being detected, or perhaps the more aggressive interpolation process has led to fewer fixations. It might be something to look at later, to make the number of fixations detected more comparable (if possible).
+
+For each experiment we can see whether any participants had particularly poor eye-gaze data and then remove them from the sample for further analysis. Here are 
+
+```{r}
+
+outlier_cutoffs_EG <- data %>% 
+  group_by(Experiment, subj) %>% 
+  summarise(mean_NA = sum(post_interp_NA_p1, post_interp_NA_p2)/sum(samples_p1,samples_p2)*100) %>% 
+  group_by(Experiment) %>% 
+  summarise(outlier_criterion = mean(mean_NA) + 2.5*sd(mean_NA))
+
+outlier_Ps_EG <- data %>% 
+  group_by(Experiment, subj) %>% 
+  summarise(mean_NA = sum(post_interp_NA_p1, post_interp_NA_p2)/sum(samples_p1,samples_p2)*100) %>% 
+  left_join(outlier_cutoffs_EG, by = "Experiment") %>% 
+  filter(mean_NA>outlier_criterion)
+
+data_NO <- data %>% 
+  filter(!subj %in% outlier_Ps_EG$subj)
+
+outlier_Ps_EG %>% 
+  kable(digits = 1) %>%
+  row_spec(0,bold=TRUE) %>%
+  kable_styling(position = "left")
+
+```
+&nbsp;
+
+The proportion of trials in which there is no recorded eye data across the two periods is very low for all experiments:  
+
+```{r}
+
+# how often are there no fixations at all in the two periods? (find NAs)
+data_NO %>% 
+  group_by(Experiment) %>% 
+  summarise(Dec = mean(is.na(AOI_cue_p1))*100, 
+            FB = mean(is.na(AOI_cue_p2))*100) %>% 
+  kable(digits = 1) %>% 
+  row_spec(0,bold=TRUE) %>%
+  kable_styling(position = "left")
+```
+&nbsp;
+
+# Analysing participant responses
+
+What was the distribution of mean responses across the experiments? Did any participants just not get it and respond fairly randomly?
+
+```{r, fig.height = 4, fig.width=6}
+
+data_NO %>% 
+  group_by(Experiment, subj) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% 
+  ggplot(aes(x = Experiment, y = mean_numResponses)) +
+  geom_violin() +
+  geom_jitter(width = .2, size = .6, colour = "red") +
+  geom_text(aes(label = subj), 
+            position = position_jitter(width = .2), 
+            check_overlap = TRUE, 
+            size = 3) +
+  labs(title = "Mean number of responses across the experiment",
+       y = "")
+
+```
+
+Seems like a few participants showed high levels of mean responses, and may not have learnt about the contingencies. To establish outliers we can set a criterion of more than 2.5 SDs above the mean response rate in each experiment.
+
+The following participants should be considered outliers. These participants are removed from further analysis:
+
+```{r, include = FALSE}
+outlier_cutoffs <- data_NO %>% 
+  group_by(Experiment, subj) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% 
+  group_by(Experiment) %>% 
+  summarise(outlier_criterion = mean(mean_numResponses)+2.5*sd(mean_numResponses))
+
+outlier_Ps_Resp <- data_NO %>% 
+  group_by(Experiment, subj) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% 
+  left_join(outlier_cutoffs, by = "Experiment") %>% 
+  filter(mean_numResponses>outlier_criterion)
+
+data_NO <- data_NO %>% 
+  filter(!subj %in% outlier_Ps_Resp$subj)
+
+outlier_Ps_Resp %>% 
+  kable(digits = 2) %>% 
+  row_spec(0,bold=TRUE) %>%
+  kable_styling(position = "left")
+
+save(data_NO, file = "output_data_NO.RData")
+
+```
+&nbsp;
+
+**Responses across blocks**
+
+The next two figures show mean number of responses broken down by block and by experiment. In the second of these, the data is split into two groups on the basis of each experiment's median ICU score.
+
+```{r, fig.height = 4, fig.width=6}
+
+# response data by experiment
+data_NO %>% 
+  group_by(Experiment, block) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% 
+  ggplot(aes(x = block, y = mean_numResponses)) +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_y_continuous(limits = c(1,2.5), breaks = seq(1,2.5,.25)) +
+  scale_x_continuous(breaks = seq(3,18,3)) +
+  facet_wrap(~Experiment)  + 
+  labs(title = "Mean number of responses, by block and by experiment",
+       x = "Block",
+       y = "Mean number of responses") +
+  ggsave("Figures/Fig_Resp.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+
+# response data by experiment, by ICU split
+data_NO %>% 
+  filter(!is.na(ICU)) %>%
+  group_by(Experiment, block, ICU_medSplit) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% 
+  ggplot(aes(x = block, y = mean_numResponses, colour = ICU_medSplit)) +
+  geom_line(size = 1) +
+  geom_point()+
+  scale_y_continuous(limits = c(1,2.5), breaks = seq(1,2.5,.25)) +
+  scale_x_continuous(breaks = seq(3,18,3)) +
+  facet_wrap(~Experiment) + 
+    labs(title = "Mean number of responses, by block and by experiment",
+         subtitle = "Plotted separately for High and Low ICU groups",
+         x = "Block",
+         y = "Mean number of responses") +
+  ggsave("Figures/Fig_Resp_by_ICU.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+
+```
+
+# Experiment 6 - Differences between conditions
+
+Experiment 6 had 3 conditions. Condition 1 was a replication of Experiments 3 and 5. Condition 2 had outcomes positioned adjacent to the responses. Condition 3 had the normal outcome positions (top of the screen), but used different stimuli and different cover story ("non-social" - marbles in bags).
+
+```{r}
+data_NO %>% 
+  filter(Experiment == "Exp6") %>% 
+  group_by(condition, block) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% 
+  ggplot(aes(x = block, y = mean_numResponses, colour = condition)) +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_y_continuous(limits = c(1,2.5), breaks = seq(1,2.5,.25)) +
+  scale_x_continuous(breaks = seq(3,18,3)) +
+  labs(title = "Experiment 6 - Mean number of responses, by block and by condition",
+       x = "Block",
+       y = "Mean number of responses")
+```
+
+Inerestingly, the most noticeable increase in responding at the start of Phase 3 is seen in the replication condition (C1).
+
+Here are the critical eye-gaze data just for Experiment 6:
+
+```{r}
+# EG on outcomes during feedback by ICU split across phases
+data_NO %>% 
+  filter(!is.na(ICU),
+         Experiment == "Exp6") %>% 
+  group_by(condition, phase, ICU_medSplit) %>% 
+  summarise(time_Out_feedback = mean(AOI_out_p2, na.rm =TRUE)) %>% 
+  ggplot(aes(x = phase, y = time_Out_feedback, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  facet_wrap(~condition) +
+  labs(title = "Experiment 6 - Eye-gaze on outcomes during feedback, by condition",
+       y = "Total fixation time",
+       x = "Phase (6 blocks each)")
+```
+
+There doesn't appear to be any major differences between the conditions here. It seems that, if anything, condition 1 is showing the weakest ICU split effect of the lot...
+
+
+# Analysing eye gaze on areas of interest
+
+How much time did participants spend looking at the 3 areas of interest (cue, response, outcome), during the two periods of the trial (decision and feedback)?
+
+```{r, fig.height= 4, fig.width=6}
+
+# mean EG time on regions of interest for different periods
+data_NO %>% 
+  group_by(Experiment) %>% 
+  summarise(cue_decision = mean(AOI_cue_p1, na.rm = TRUE),
+            resp_decision = mean(AOI_resp_p1, na.rm =TRUE),
+            out_decision = mean(AOI_out_p1, na.rm =TRUE),
+            cue_feedback = mean(AOI_cue_p2, na.rm = TRUE),
+            resp_feedback = mean(AOI_resp_p2, na.rm = TRUE),
+            out_feedback = mean(AOI_out_p2, na.rm =TRUE)) %>% 
+  pivot_longer(cols = -Experiment, names_to = "event", values_to = "time") %>% 
+  separate(event, c("AOI", "period")) %>% 
+  mutate(AOI = fct_inorder(AOI)) %>% 
+  ggplot(aes(x = period, y = time, fill = AOI)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  labs(title = "Fixation time on AOIs, by period of the trial and experiment",
+       y = "") +
+  facet_wrap(~Experiment)
+  
+```
+
+Participants mostly focus on the cue and the responses during the decision period. In the feedback period, attention is more evenly distributed, with greater processing of the response and the outcome.  
+
+We are particularly interested in the feedback period. Does the processing of the AOIs change as a factor of block (training) and ICU score? 
+
+```{r, fig.height= 4, fig.width=6}
+
+# EG on CUE AOI during feedback by ICU split across blocks
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(Experiment, block, ICU_medSplit) %>% 
+  summarise(time_Out_feedback = mean(AOI_cue_p2, na.rm =TRUE)) %>% 
+  ggplot(aes(x = block, y = time_Out_feedback, colour = ICU_medSplit)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = seq(3,18,3)) +
+  labs(title = "Eye-gaze on CUES during feedback") +
+  facet_wrap(~Experiment)
+
+```
+
+```{r, fig.height= 4, fig.width=6}
+
+# EG on RESPONSE AOI during feedback by ICU split across blocks
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(Experiment, block, ICU_medSplit) %>% 
+  summarise(time_Out_feedback = mean(AOI_resp_p2, na.rm =TRUE)) %>% 
+  ggplot(aes(x = block, y = time_Out_feedback, colour = ICU_medSplit)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = seq(3,18,3)) +
+  labs(title = "Eye-gaze on RESPONSES during feedback") +
+  facet_wrap(~Experiment)
+
+```
+
+```{r, fig.height= 4, fig.width=6}
+
+# EG on OUTCOME AOI during feedback by ICU split across blocks
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(Experiment, block, ICU_medSplit) %>% 
+  summarise(time_Out_feedback = mean(AOI_out_p2, na.rm =TRUE)) %>% 
+  ggplot(aes(x = block, y = time_Out_feedback, colour = ICU_medSplit)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = seq(3,18,3)) +
+  labs(title = "Eye-gaze on OUTCOMES during feedback") +
+  facet_wrap(~Experiment)
+
+```
+
+The pattern for **outcomes** is somewhat inconsistent, though there is a trend to seeing more eye-gaze to outcomes in the **low** ICU condition compared to the **high** ICU condition. Here are the same data averaged over each phase, rather than each block:
+
+```{r, fig.height= 4, fig.width=6}
+
+# EG on outcomes during feedback by ICU split across phases
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(Experiment, phase, ICU_medSplit) %>% 
+  summarise(time_Out_feedback = mean(AOI_out_p2, na.rm =TRUE)) %>% 
+  ggplot(aes(x = phase, y = time_Out_feedback, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  facet_wrap(~Experiment) +
+  labs(title = "Eye-gaze on outcomes during feedback",
+       y = "Total fixation time",
+       x = "Phase (6 blocks each)")
+
+
+```
+
+What about looking at the data from just the first second in Experiments 5 and 6 - this makes them more comparable with Experiments 3 and 7. Here I've taken fixations that must have started within the first 1 second of the feedback period (they were allowed to end after this cut off).
+
+```{r, fig.height= 4, fig.width=6}
+
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(Experiment, phase, ICU_medSplit) %>% 
+  summarise(time_Out_feedback = mean(AOI_out_p2, na.rm =TRUE),
+            time_Out_feedback_1s = mean(AOI_out_p2_1s, na.rm =TRUE)) %>% 
+  mutate(time_Out_feedback =
+         if_else(Experiment %in% c("Exp5", "Exp6"),
+         true = time_Out_feedback_1s,
+         false = time_Out_feedback)) %>% 
+  ggplot(aes(x = phase, y = time_Out_feedback, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  facet_wrap(~Experiment) +
+  labs(title = "Eye-gaze on outcomes during feedback",
+       subtitle = "Experiment 5 and 6 reduced to first 1 second of processing",
+       y = "Total fixation time",
+       x = "Phase (6 blocks each)")
+
+```
+
+It doesn't seem to change the pattern that dramatically.
+
+# Looking at correlations between eye-gaze patterns and ICU
+
+There doesn't appear to be any overall correlation between the processing of responses and outcomes in the feedback phase and the ICU score:
+
+```{r, fig.height= 4, fig.width=6}
+
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(subj) %>% 
+  summarise(ICU = min(ICU),
+            response = mean(AOI_resp_p2, na.rm =TRUE),
+            outcome = mean(AOI_out_p2, na.rm =TRUE)) %>% 
+  pivot_longer(cols = c("response", "outcome"), names_to = "period", values_to = "time") %>% 
+  ggplot(aes(x = ICU, y = time, colour = period)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm") +
+  labs(title = "Correlation between fixation time on responses or outcomes and ICU score",
+       y = "Fixation time")
+    
+
+```
+
+If we split it by experiment? It's pretty inconsistent. Somewhat of a negative trend in Experiment 3 for outcomes, but not much else.
+
+```{r, fig.height= 4, fig.width=6}
+
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(Experiment, subj) %>% 
+  summarise(ICU = min(ICU),
+            response = mean(AOI_resp_p2, na.rm =TRUE),
+            outcome = mean(AOI_out_p2, na.rm =TRUE)) %>% 
+  pivot_longer(cols = c("response", "outcome"), names_to = "period", values_to = "time") %>% 
+  ggplot(aes(x = ICU, y = time, colour = period)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm") +
+  facet_wrap(~Experiment) +
+  labs(title = "Correlation between fixation time on responses or outcomes and ICU score",
+       y = "Fixation time")
+    
+
+```
+
+# Time to first fixation on outcomes
+
+Of particular interest is the speed at which participants begin processing the outcome stimuli during the feedback phase. The data presented below show these latencies across the four experiments, and between the median splits on ICU. No strong patterns jump out here, but it's clear that the timing is affected by the feedback duration - participants make quicker movements to the outcomes when the time is limited (Exp 3 and Exp 7). 
+
+```{r, fig.height= 4, fig.width=6}
+# time to fixate on outcomes during feedback
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(Experiment, phase, ICU_medSplit) %>% 
+  summarise(tOutFix = mean(tOutFix, na.rm = TRUE)) %>% 
+  ggplot(aes(x = phase, y = tOutFix, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  facet_wrap(~Experiment) +
+  labs(title = "Time to first fixation on outcomes during feedback",
+       y = "Time in ms",
+       x = "Phase (6 blocks)")
+
+```
+
+In order to make comparisons across the different experiments, we can normalise the data, by expressing the data as a ratio against the mean time for each participant. Values above 1 indicate slower times to fixate compared to the mean, and values lower than 1 faster times.
+
+```{r, fig.height= 4, fig.width=6}
+
+# data would be more comparable across experiments if we normalised by the mean time for each participant
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(subj, Experiment, phase, ICU_medSplit) %>% 
+  summarise(tOutFix = mean(tOutFix, na.rm = TRUE)) %>% 
+  group_by(subj) %>% 
+  mutate(tOutFixNorm = tOutFix / mean(tOutFix, na.rm = TRUE)) %>% 
+  group_by(Experiment, phase, ICU_medSplit) %>% 
+  summarise(tOutFixNorm = mean(tOutFixNorm, na.rm = TRUE)) %>% 
+  ggplot(aes(x = phase, y = tOutFixNorm, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  coord_cartesian(ylim = c(.8,1.2)) +
+  facet_wrap(~Experiment) +
+  labs(title = "Time to first fixation on outcomes during feedback",
+     y = "Normalised time in ms",
+     x = "Phase (6 blocks)")
+
+```
+
+Some patterns begin to emerge, particularly in Exp 3 and Exp 7 (those with short feedback periods), where the low ICU participants seem to decrease time to fixate on outcomes, while the high ICU participants seems to increase time to process outcomes.
+
+Do these patterns change if we just use the first 1 second of the feedback time in Experiment 5 and 6?
+
+```{r, fig.height= 4, fig.width=6}
+# time to fixate on outcomes during feedback
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(Experiment, phase, ICU_medSplit) %>% 
+  summarise(tOutFix = mean(tOutFix, na.rm = TRUE),
+            tOutFix_1s = mean(tOutFix_1s, na.rm = TRUE)) %>%
+  mutate(tOutFix = if_else(Experiment %in% c("Exp5", "Exp6"),
+         true = tOutFix_1s,
+         false = tOutFix)) %>% 
+  ggplot(aes(x = phase, y = tOutFix, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  facet_wrap(~Experiment) +
+  labs(title = "Time to first fixation on outcomes during feedback",
+       y = "Time in ms",
+       x = "Phase (6 blocks)")
+
+data_NO %>% 
+  filter(!is.na(ICU)) %>% 
+  group_by(subj,Experiment, phase, ICU_medSplit) %>% 
+  summarise(tOutFix = mean(tOutFix, na.rm = TRUE),
+            tOutFix_1s = mean(tOutFix_1s, na.rm = TRUE)) %>%
+  mutate(tOutFix = if_else(Experiment %in% c("Exp5", "Exp6"),
+         true = tOutFix_1s,
+         false = tOutFix)) %>% 
+  group_by(subj) %>% 
+  mutate(tOutFixNorm = tOutFix / mean(tOutFix, na.rm = TRUE)) %>% 
+  group_by(Experiment, phase, ICU_medSplit) %>% 
+  summarise(tOutFixNorm = mean(tOutFixNorm, na.rm = TRUE)) %>% 
+  ggplot(aes(x = phase, y = tOutFixNorm, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  coord_cartesian(ylim = c(.8,1.2)) +
+  facet_wrap(~Experiment) +
+  labs(title = "Time to first fixation on outcomes during feedback",
+     y = "Normalised time in ms",
+     x = "Phase (6 blocks)")
+```
+
+Again, I can't really see any noticeable change in the pattern of data when I restrict the analysis to the first 1 second of feedback time in Experiments 5 and 6.
+
+# "Cherry picking?": Experiment Exp 3, Exp 6 condition 1, and Exp 7
+
+Here's an analysis which ignores Experiment 5, and focuses only on Condition 1 from Experiment 6, which is the true replication of the previous successful experiment (3). Here I've lumped all the data together (i.e., not broken down by experiment) and focused on the eye-gaze effect in the first 1 second of feedback time in the case of Exp 6, condition 1.
+
+```{r, fig.height= 4, fig.width=6}
+
+# get the relevant data
+selectedData <- data_NO %>% 
+  filter(!is.na(ICU),
+         Experiment %in% c("Exp3", "Exp6", "Exp7"),
+         !condition %in% c("C2","C3")) %>%
+  group_by(Experiment, subj, phase, ICU_medSplit, ICU) %>% 
+  summarise(tOutFix = mean(tOutFix, na.rm = TRUE),
+            tOutFix_1s = mean(tOutFix_1s, na.rm = TRUE)) %>%
+  mutate(tOutFix = if_else(Experiment %in% c("Exp5", "Exp6"),
+         true = tOutFix_1s,
+         false = tOutFix)) %>% 
+  ungroup()
+
+# output these data to a csv for Caroline
+
+data_NO %>% 
+  filter(!is.na(ICU),
+         Experiment %in% c("Exp3", "Exp6", "Exp7"),
+         !condition %in% c("C2","C3")) %>% 
+  write_csv("output_3_61_7_date290620.csv")
+
+# graph time to fixate on outcomes during feedback
+
+selectedData %>% 
+  group_by(phase, ICU_medSplit) %>% 
+  summarise(tOutFix = mean(tOutFix, na.rm = TRUE)) %>% 
+  ggplot(aes(x = phase, y = tOutFix, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  coord_cartesian(ylim = c(200,350)) +
+  labs(title = "Time to first fixation on outcomes during feedback",
+       y = "Time in ms",
+       x = "Phase (6 blocks)")
+
+selectedData %>%  
+  group_by(subj) %>% # normalisation process
+  mutate(tOutFixNorm = tOutFix / mean(tOutFix, na.rm = TRUE)) %>% 
+  group_by(phase, ICU_medSplit) %>% 
+  summarise(tOutFixNorm = mean(tOutFixNorm, na.rm = TRUE)) %>% 
+  ggplot(aes(x = phase, y = tOutFixNorm, fill = ICU_medSplit)) +
+  geom_col(position = position_dodge2(), colour = "black") +
+  coord_cartesian(ylim = c(.8,1.2)) +
+  labs(title = "Time to first fixation on outcomes during feedback",
+     y = "Normalised time in ms",
+     x = "Phase (6 blocks)")
+```
+
+Here are the results from the ANOVA with the non-normalised data (first figure). I'm not too confident doing inferential stats in R yet, but I've checked these results in JASP and the main effect and interaction were confirmed as significant (though values differed a bit, not sure why yet).
+
+```{r, warning = FALSE}
+selectedData %>% 
+  select(-Experiment, -tOutFix_1s) %>% 
+  aov(tOutFix ~ (ICU_medSplit*phase) + Error(subj/(phase)), data = .) %>% 
+  tidy() %>% 
+  kable(digits = 3)
+
+selectedData %>% 
+  pivot_wider(names_from = phase, values_from = tOutFix, names_prefix = "phase_") %>% 
+  select(-tOutFix_1s) %>% 
+  write_csv("ICU_by_phase_exp367.csv")
+```
+
+Most of the effect seems to be happening in the change in eye-gaze between the second and third phases. What does the correlation look like between ICU and Phase 3 time to fixate on outcomes?
+
+```{r,  fig.height= 4, fig.width=6}
+corData <- selectedData %>% 
+  filter(phase==3) %>% 
+  drop_na(ICU, tOutFix)
+
+cor_stat_annotation <- str_c("r = ",
+                             round(cor(corData$ICU, corData$tOutFix),3),
+                             ", p = ",
+                             round(cor.test(corData$ICU, corData$tOutFix)$p.value,3))
+
+corData %>% 
+  ggplot(aes(x = ICU, y = tOutFix))+
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  scale_y_continuous(limits = c(0,700)) +
+  annotate("text", x = 35, y = 50, label = cor_stat_annotation, size = 5) +
+  labs(title = "Correlation between ICU score and time to process outcomes in phase 3",
+       subtitle = "Exp 3, 6.1, and 7",
+       y = "Time (ms)")
+
+```
+
+So this specific test does produce a significant correlation between ICU and time to process outcomes. Phase 2 is not significant.
+
+What about the change in time between phase 2 and phase 3?
+
+```{r,  fig.height= 4, fig.width=6}
+
+cor_p2_p3_change <- selectedData %>% 
+  filter(!phase==1) %>% 
+  select(-tOutFix_1s) %>%
+  pivot_wider(names_from = phase, values_from = tOutFix, names_prefix = "phase_") %>% 
+  mutate(p2_p3_change = phase_3-phase_2) %>% 
+  drop_na()
+
+cor_stat_annotation <- str_c("r = ",
+                             round(cor(cor_p2_p3_change$ICU, cor_p2_p3_change$p2_p3_change),3),
+                             ", p = ",
+                             round(cor.test(cor_p2_p3_change$ICU, cor_p2_p3_change$p2_p3_change)$p.value,3))
+
+cor_p2_p3_change %>% 
+  ggplot(aes(x = ICU, y = p2_p3_change))+
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  scale_y_continuous(limits = c(-300,300)) +
+  annotate("text", x = 35, y = -250, label = cor_stat_annotation, size = 5) +
+  labs(title = "Correlation between ICU score and change in time to process outcomes in phases 2 and 3",
+       subtitle = "Exp 3, 6.1, and 7 | positive scores indicate an increase in time taken",
+       y = "Difference in time taken (Phase 3 - Phase 2)")
+  
+```
+
+You can see here that those participants who have higher ICU scores, tend to show an increase in time taken to process outcomes between phases 2 and 3. In contrast, those participants that have lower IUC scores tend to show a decrease in time taken to process outcomes (negative scores)
+
+# Further things to look at:
+
+- Calculate the **difference** between the eye-gaze for outcomes and responses during feedback (i.e., the selective bias) and look at whether that correlates with ICU

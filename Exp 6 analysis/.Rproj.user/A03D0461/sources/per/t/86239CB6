@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582717709606.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "803140655",
+    "id" : "86239CB6",
+    "lastKnownWriteTime" : 1582734690,
+    "last_content_update" : 1582734690063,
+    "path" : "C:/Users/beesleyt/OneDrive - Lancaster University/Desktop PC/Projects/Psychopathy/Exp 6 analysis/2_generateAOIcols.R",
+    "project_path" : "2_generateAOIcols.R",
+    "properties" : {
+        "cursorPosition" : "16,37",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

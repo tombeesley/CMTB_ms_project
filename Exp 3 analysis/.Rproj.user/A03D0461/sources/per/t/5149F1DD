@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1572269710664.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "4191006718",
+    "id" : "5149F1DD",
+    "lastKnownWriteTime" : 1582751413,
+    "last_content_update" : 1582751413298,
+    "path" : "C:/Users/beesleyt/OneDrive - Lancaster University/Desktop PC/Projects/Psychopathy/Exp 3 analysis/1_Raw2Saccades.R",
+    "project_path" : "1_Raw2Saccades.R",
+    "properties" : {
+        "cursorPosition" : "17,28",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

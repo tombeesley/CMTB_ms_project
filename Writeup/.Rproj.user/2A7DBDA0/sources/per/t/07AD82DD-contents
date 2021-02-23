@@ -1,0 +1,173 @@
+---
+title: "Nature Figures"
+author: "Tom Beesley"
+date: "13/05/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r, include = FALSE}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(broom)
+library(patchwork)
+
+theme_set(theme_classic())
+
+load("output_data_NO.RData")
+
+```
+
+Could you make a lovely picture of the results for experiment 1 (our experiments 3 and 7 combined)? And could you attempt two different graphs, one with the median split to illustrate the stats which I will do continuously with and interaction effect. (Feel free to do this if you wish - I can't do it until I have access to the files in GitHub). And then the second graph could you do a split of 28 and above versus everyone else? I haven't done this myself before but a paper came out recently which describes a score of 28 or more as "at risk" for being antisocial. So it would be interesting to look at as a more meaningful split. The numbers may be too small but can you have a go?
+
+```{r}
+
+# this adds a split based on the higher level of ICU of 28
+data_NO <- data_NO %>% 
+  mutate(ICU_split_28 = if_else(ICU < 28, true = "<28", false = "+28")) %>% 
+  mutate(epoch = ceiling(block/2))
+
+# output data for caroline's analysis
+data_NO %>% 
+  filter(Experiment %in% c("Exp3", "Exp6", "Exp7")) %>% 
+  filter(condition %in% c(NA, "C1")) %>% 
+  select(Experiment:phase, epoch, block:RT, ICU, ICU_Exp_medSplit, 
+         AOI_out_p2, AOI_out_p2_1s, tOutFix, tOutFix_1s) %>% 
+  write_csv("Exp3_6_7_trial_data.csv")
+
+
+# filter to data for experiments of interest. Summarise variables of interest
+data_Fig1 <- data_NO %>% 
+  filter(!is.na(ICU),
+         Experiment %in% c("Exp3", "Exp7")) %>% 
+  group_by(Experiment, subj, epoch, ICU_medSplit, ICU_split_28) %>% 
+  summarise(latFix = mean(tOutFix, na.rm = TRUE),
+            durFix = mean(AOI_out_p2, na.rm = TRUE)) %>% 
+  ungroup()
+
+# custom theme settings that are applicable to both figures
+custom_theme_settings <- 
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.box.spacing = unit(.1, "cm"),
+        axis.title.y = element_text(face = "bold", size = 14),
+        axis.title.y.left = element_text(margin = margin(r = 15)),
+        axis.text.y = element_text(face = "bold", size = 12),
+        axis.title.x = element_text(face = "bold", size = 14),
+        axis.title.x.bottom = element_text(margin = margin(t = 15)),
+        axis.text.x = element_text(face = "bold", size = 12))
+  
+# Phase rectangles for latency figure
+lat_ymin <- 0; lat_ymax <- 400
+phase_rects_lat <- list(geom_rect(aes(xmin = 0.5, xmax = 3.5,
+                                         ymin = lat_ymin, ymax = lat_ymax), 
+                                     fill = "#909090", alpha = .01),
+                           geom_rect(aes(xmin = 3.5, xmax = 6.5,
+                                         ymin = lat_ymin, ymax = lat_ymax), 
+                                     fill = "#606060", alpha = .01),
+                           geom_rect(aes(xmin = 6.5, xmax = 9.5,
+                                         ymin = lat_ymin, ymax = lat_ymax), 
+                                     fill = "#909090", alpha = .01),
+                    annotate("text", x = c(2,5,8), y = 390, label = c("Phase 1", "Phase 2", "Phase 3"), fontface = "bold", size = 6))
+
+# Time to first fixation on outcomes during feedback
+# Data from Exp 3 and Exp 7 ONLY
+latency_Fig_data <-
+  data_Fig1 %>% 
+  group_by(epoch, ICU_medSplit) %>% 
+  summarise(latFix_mean = mean(latFix, na.rm = TRUE),
+            latFix_se = sd(latFix, na.rm = TRUE)/sqrt(n()))
+
+latency_Fig_data %>% 
+  ggplot(aes(x = epoch, y = latFix_mean, fill = ICU_medSplit)) +
+  geom_line(aes(colour = ICU_medSplit), size = 1) +
+  geom_errorbar(aes(ymin = latFix_mean-latFix_se, ymax = latFix_mean + latFix_se), 
+                width = .2, size = 1) +
+  geom_point(shape = 21, stroke = 1.5, size = 4) +
+  phase_rects_lat +
+  custom_theme_settings +
+  coord_cartesian(ylim = c(lat_ymin,lat_ymax)) +
+  labs(title = "Fig 1A. Time to first fixation on outcomes during feedback",
+       y = "Time (ms)",
+       x = "Epoch of 8 trials") +
+  scale_fill_discrete(labels = c("High ICU", "Low ICU")) +
+  guides(colour = FALSE, fill = FALSE) +
+  scale_x_continuous(breaks = 1:9)
+
+  
+# Phase rectangles for duration figure
+dur_ymin <- 0; dur_ymax <- 400
+phase_rects_dur <- list(geom_rect(aes(xmin = 0.5, xmax = 3.5,
+                                         ymin = dur_ymin, ymax = dur_ymax), 
+                                     fill = "#909090", alpha = .01),
+                           geom_rect(aes(xmin = 3.5, xmax = 6.5,
+                                         ymin = dur_ymin, ymax = dur_ymax), 
+                                     fill = "#606060", alpha = .01),
+                           geom_rect(aes(xmin = 6.5, xmax = 9.5,
+                                         ymin = dur_ymin, ymax = dur_ymax), 
+                                     fill = "#909090", alpha = .01),
+                    annotate("text", x = c(2,5,8), y = 390, label = c("Phase 1", "Phase 2", "Phase 3"), fontface = "bold", size = 6))
+
+duration_Fig_data <- 
+  data_Fig1 %>% 
+  group_by(epoch, ICU_medSplit) %>% 
+  summarise(durFix_mean = mean(durFix, na.rm = TRUE),
+            durFix_se = sd(durFix, na.rm = TRUE)/sqrt(n()))
+
+duration_Fig_data %>% 
+  ggplot(aes(x = epoch, y = durFix_mean, fill = ICU_medSplit)) +
+  geom_line(aes(colour = ICU_medSplit), size = 1) +
+  geom_errorbar(aes(ymin = durFix_mean-durFix_se, ymax = durFix_mean + durFix_se), 
+                width = .2, size = 1) +
+  geom_point(shape = 21, stroke = 1.5, size = 4) +
+  phase_rects_dur +
+  custom_theme_settings +
+  coord_cartesian(ylim = c(0,400)) +
+  labs(title = "Fig 1B. Duration of fixations on outcomes during feedback",
+       y = "Time (ms)",
+       x = "Epoch of 8 trials") +
+  scale_fill_discrete(labels = c("High ICU", "Low ICU")) +
+  guides(colour = FALSE) +
+  scale_x_continuous(breaks = 1:9)
+
+latency_Fig + duration_Fig
+
+# export
+write_csv(data_Fig1, "output_all_Plevel_summary.csv")
+write_csv(latency_Fig_data, "output_latency_data.csv")
+write_csv(duration_Fig_data, "output_duration_data.csv")
+
+```
+
+```{r}
+data <- data_NO %>% 
+  mutate(gender = recode(sex, "female" = "F")) %>% 
+  select(Experiment, subj, age, gender, phase:RT)
+```
+
+```{r}
+
+data <- filter(data, RT < 25000)
+
+data %>% 
+  ggplot(aes(x = trial, y = RT)) +
+  geom_point(aes(colour = age))
+
+data %>%
+  group_by(Experiment, trial, gender) %>% 
+  summarise(meanRT = mean(RT)) %>% 
+  ggplot(aes(x = trial, y = meanRT, colour = gender)) +
+  geom_point(size = 3)
+
+
+
+```
+

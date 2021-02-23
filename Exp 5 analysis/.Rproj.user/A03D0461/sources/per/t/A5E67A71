@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582713665969.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "6|42|18|0|\n28|37|38|0|\n",
+    "hash" : "2333663808",
+    "id" : "A5E67A71",
+    "lastKnownWriteTime" : 1582716551,
+    "last_content_update" : 1582716551149,
+    "path" : "C:/Users/beesleyt/OneDrive - Lancaster University/Desktop PC/Projects/Psychopathy/Exp 5 analysis/3_combineFinalDF.R",
+    "project_path" : "3_combineFinalDF.R",
+    "properties" : {
+        "cursorPosition" : "38,1",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

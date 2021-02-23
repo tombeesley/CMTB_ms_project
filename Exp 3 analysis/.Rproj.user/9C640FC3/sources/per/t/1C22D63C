@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1582909058894.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "7676035",
+    "id" : "1C22D63C",
+    "lastKnownWriteTime" : 1582909106,
+    "last_content_update" : 1582909106048,
+    "path" : "C:/Users/beesleyt/OneDrive - Lancaster University/Desktop PC/Projects/Psychopathy/Exp 3 analysis/2_addAOI_combineResp_Exp3.R",
+    "project_path" : "2_addAOI_combineResp_Exp3.R",
+    "properties" : {
+        "cursorPosition" : "68,0",
+        "scrollLine" : "32"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
