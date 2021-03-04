@@ -1,0 +1,286 @@
+---
+title: "trial-level descriptives"
+author: "Arthur Kary"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+date_compiled_title = c("HTML created on", date())
+```
+
+---
+date: `r date_compiled_title`
+---
+
+## Trial-level descriptives
+
+The aim of this document is to provide some insight into effects that may be occurring across trials within a block. I'm going to work off the cleaned data file output from "writeup.Rmd" for now, and I'm also going to exclude condition 3 of experiment 6 from the descriptives below because it did not feature animal stimuli. These choices are, of course, subject to change.
+
+
+```{r, include = FALSE}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(broom)
+library(patchwork)
+
+theme_set(theme_classic())
+
+
+
+load("../Writeup/output_data_NO.RData") # Load cleaned data file
+
+data_NO <- data_NO %>% 
+  filter(!condition == "C3" | is.na(condition)) %>% # Filter out condition 3 (NON ANIMAL STIMULI)
+  mutate(trial_within_block = trial + 4 - block * 4) # set up a column storing trial number within block 
+
+```
+
+
+My main motivation for investigating the data at the trial-within-block level came from my experience completing the AGP task. Two features of the task stuck out to me while piloting: 
+
+1) The way that blocks are constructed, so that the ppt sees all four cue-response pairs and then goes to a break instruction screen between blocks, made it easier to accurately respond to trials later within a block. Because the task is deterministic, and the presentation of trials involves sampling cues without replacement within a block, the implicit option set gets smaller as the block progresses even if all responses remain available on the screen. So, knowing that, e.g., lollipop was the right answer the previous trial in the block rules it out as the answer to the current trial. If a participant is paying a bit of attention and has decent memory, they might be able to guess the right response on the last trial of a block despite not having knowledge of the actual SR association just because they remember what they selected previously. The instruction screens between blocks also creates a useful contextual cue so you don't confuse trials across different blocks. Of course, I didn't go through the AGP task completely naive, so I may have been more privy to noticing this structure than the average participant. The descriptives below will look at this issue from a few angles.       
+
+2) The order in which presents are located on the screen, while randomized between subject, stays constant throughout all blocks and phases of the experiment (i.e., lollipop is always first from the left, cupcake is always second from the left etc.), and I found myself using location rather than the response categories themselves to help learn the associations. The .csv files that I have do not break down number of responses per trial by location (though this info looks to be available in the raw matlab data files) so I haven't looked at this yet. I do suspect, however, that this feature also makes it easier to complete the task as location seems like it is easier to learn than the verbal response categories (for me at least).       
+
+
+## Mean number of responses across trials
+
+Below are figures showing the relationship between mean number of responses and trial number (total and median split by ICU). The filled vertical purple lines indicate a new phase has started and the dotted vertical blue lines indicate the start of a new block. The relevant pattern is that it looks like there is a slope within each block, indicating that the location of a trial within a block influences accuracy in a way that does not necessarily mean increased associative strength. However, this sloping pattern evens out across blocks-within-phase, which I think indicates that people are learning the associations, and also seems to even out across phases (I think this means that overall knowledge of how the task works makes it easier in the final phase because you know that you need to pay attention to outcome).
+
+```{r, fig.height = 4, fig.width=8}
+data_NO %>% 
+  group_by(Experiment,trial) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% # Check you are taking the right mean
+  ggplot(aes(x = trial, y = mean_numResponses)) +
+  geom_vline(xintercept = seq(1,72,4),color="blue",linetype="dotted") +
+  geom_vline(xintercept = seq(1,72,24),color="purple") +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_y_continuous(limits = c(1,3), breaks = seq(1,3,.25)) +
+  scale_x_continuous(breaks = seq(1,72,4)) +
+  facet_wrap(~Experiment)  + 
+  labs(title = "Mean number of responses, by trial and by experiment",
+       x = "Trial",
+       y = "Number of responses") +
+  ggsave("Figures/Fig_RespByTrial.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+
+# response data by experiment, by ICU split
+data_NO %>% 
+  filter(!is.na(ICU)) %>%
+  group_by(Experiment, trial, ICU_medSplit) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% 
+  ggplot(aes(x = trial, y = mean_numResponses, colour = ICU_medSplit)) +
+  geom_vline(xintercept = seq(1,72,4),color="blue",linetype="dotted") +
+  geom_vline(xintercept = seq(1,72,24),color="purple") +
+  geom_line(size = 1) +
+  geom_point()+
+  scale_y_continuous(limits = c(1,3), breaks = seq(1,3,.25)) +
+  scale_x_continuous(breaks = seq(1,72,4)) +
+  facet_wrap(~Experiment) + 
+  labs(title = "Mean number of responses, by trial and by experiment",
+       subtitle = "Plotted separately for High and Low ICU groups",
+       x = "Trial",
+       y = "Mean number of responses") +
+  ggsave("Figures/Fig_RespByTrial_ICU.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+```
+
+We can see this clearly by averaging across blocks, but looking at responses as a function of the trial order with the block:
+
+```{r}
+data_NO %>% 
+  group_by(Experiment,trial_within_block) %>% 
+  summarise(mean_numResponses = mean(numResp)) %>% # Check you are taking the right mean
+  ggplot(aes(x = trial_within_block, y = mean_numResponses)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~Experiment) +
+  labs(title = "Mean number of responses, by trial-within-block and by experiment",
+       x = "Trial position within a block",
+       y = "Number of responses")
+
+```
+
+
+## Mean log RTs across trials-within-block
+
+Effects of later trials being easier also appear in decision reaction times, which I've log-transformed before averaging across participants. 
+
+```{r, fig.height = 4, fig.width=8}
+ylim=c(4,10)
+ybreaks=seq(4,10,2)
+
+data_NO %>% 
+  group_by(Experiment, trial) %>% 
+  summarise(mean_logRT = mean(log(RT))) %>% # Check you are taking the right mean
+  ggplot(aes(x = trial, y = mean_logRT)) +
+  geom_vline(xintercept = seq(1,72,4),color="blue",linetype="dotted") +
+  geom_vline(xintercept = seq(1,72,24),color="purple") +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_y_continuous(limits = ylim, breaks = ybreaks) +
+  scale_x_continuous(breaks = seq(1,72,4)) +
+  facet_wrap(~Experiment)  + 
+  labs(title = "Mean logRT, by trial and by experiment",
+       x = "Trial",
+       y = "Log RT") +
+  ggsave("Figures/Fig_logRTByTrial.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+
+# response data by experiment, by ICU split
+data_NO %>% 
+  filter(!is.na(ICU)) %>%
+  group_by(Experiment, trial, ICU_medSplit) %>% 
+  summarise(mean_logRT = mean(log(RT))) %>% 
+  ggplot(aes(x = trial, y = mean_logRT, colour = ICU_medSplit)) +
+  geom_vline(xintercept = seq(1,72,4),color="blue",linetype="dotted") +
+  geom_vline(xintercept = seq(1,72,24),color="purple") +
+  geom_line(size = 1) +
+  geom_point()+
+  scale_y_continuous(limits = ylim, breaks = ybreaks) +
+  scale_x_continuous(breaks = seq(1,72,4)) +
+  facet_wrap(~Experiment) + 
+  labs(title = "Mean logRT, by trial and by experiment",
+       subtitle = "Plotted separately for High and Low ICU groups",
+       x = "Trial",
+       y = "Log RT") +
+  ggsave("Figures/Fig_logRTByTrial_ICU.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+```
+
+Averaging across blocks, we can look at log response times as a function of the trial order with the block:
+
+```{r}
+data_NO %>% 
+  group_by(Experiment,trial_within_block) %>% 
+  summarise(mean_logRT = mean(log(RT))) %>% # Check you are taking the right mean
+  ggplot(aes(x = trial_within_block, y = mean_logRT)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~Experiment) +
+  labs(title = "Mean log response time, by trial-within-block and by experiment",
+       x = "Trial position within a block",
+       y = "Mean log response time")
+
+```
+
+## Proportion of participants not looking at important trial features
+
+Another interesting way to look at the data is by how much of the display participants are encoding as a function of trial. Below is the proportion of participants not even looking at the cue during their decision time. This varies from 8-10% of total trials across experiments (see table at end of doc). There is also a clear pattern here.
+
+```{r, fig.height = 4, fig.width=8}
+data_NO %>% 
+  group_by(Experiment,trial) %>% 
+  mutate(NoLook = as.numeric(AOI_cue_p1==0)) %>%
+  summarise(mean_NoLooks = mean(NoLook,na.rm = T)) %>% # What are the NAs?
+  ggplot(aes(x = trial, y = mean_NoLooks)) +
+  geom_vline(xintercept = seq(1,72,4),color="blue",linetype="dotted") +
+  geom_vline(xintercept = seq(1,72,24),color="purple") +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,.1)) +
+  scale_x_continuous(breaks = seq(1,72,4)) +
+  facet_wrap(~Experiment)  + 
+  labs(title = "Proportion of ppts not looking at cue during decision, by trial and by experiment",
+       x = "Trial",
+       y = "Proportion of ppts not looking at cue in p1") +
+  ggsave("Figures/Fig_NoCueByTrial.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+
+data_NO %>% 
+  group_by(Experiment,trial,ICU_medSplit) %>% 
+  mutate(NoLook = as.numeric(AOI_cue_p1==0)) %>%
+  summarise(mean_NoLooks = mean(NoLook,na.rm = T)) %>% # What are the NAs?
+  ggplot(aes(x = trial, y = mean_NoLooks,colour=ICU_medSplit)) +
+  geom_vline(xintercept = seq(1,72,4),color="blue",linetype="dotted") +
+  geom_vline(xintercept = seq(1,72,24),color="purple") +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,.1)) +
+  scale_x_continuous(breaks = seq(1,72,4)) +
+  facet_wrap(~Experiment)  + 
+  labs(title = "Proportion of ppts not looking at cue during decision, by trial and by experiment and ICU split",
+       x = "Trial",
+       y = "Proportion of ppts not looking at cue in p1") +
+  ggsave("Figures/Fig_NoCueByTrial_ICU.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+```
+
+One might think that participants are less accurate on trials in which they don't look at the cue (i.e., randomly responding), but instead the first figure below shows participants are very accurate on these trials (note that experiment 6 has more participants so the raw counts are higher for both figures). These trials are mostly capturing instances where there is only one present remaining to choose from (second figure), but while most of these cases are on the last trial of the block, it's not always. We should also check for bugs in the AOIs to make sure we are always capturing when a participant is looking at a cue during decision. 
+
+```{r, fig.height = 4, fig.width=8}
+
+data_NO %>%
+  filter(as.numeric(AOI_cue_p1)==0)%>% # Focus analysis on when subj not looking at cue
+  group_by(Experiment)%>%
+  ggplot(aes(x=numResp)) +
+  geom_histogram(binwidth = 1) +
+  facet_wrap(~Experiment)+
+  labs(title = "Accuracy on trials when ppts don't look at cue during decision",
+       y = "counts",
+       x = "numResp")
+
+data_NO %>%
+  filter(as.numeric(AOI_cue_p1)==0)%>% # Focus analysis on when subj not looking at cue
+  group_by(Experiment)%>%
+  ggplot(aes(x=trial_within_block)) +
+  geom_histogram(binwidth = 1) +
+  facet_wrap(~Experiment)+
+  labs(title = "Trial within block when ppts don't look at cue during decision",
+       y = "counts",
+       x = "trial within block")
+
+```
+
+I checked the responses AOI during decision, which looks more like you would expect, though still some inattention in later blocks. Ppts seem to know location well enough to click on presents sufficiently accurately to finish a trial without being captured as looking? 
+
+```{r, fig.height = 4, fig.width=8}
+
+data_NO %>% 
+  group_by(Experiment,trial) %>% 
+  mutate(NoLook = as.numeric(AOI_resp_p1==0)) %>%
+  summarise(mean_NoLooks = mean(NoLook,na.rm = T)) %>% # What are the NAs?
+  ggplot(aes(x = trial, y = mean_NoLooks)) +
+  geom_vline(xintercept = seq(1,72,4),color="blue",linetype="dotted") +
+  geom_vline(xintercept = seq(1,72,24),color="purple") +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,.1)) +
+  scale_x_continuous(breaks = seq(1,72,4)) +
+  facet_wrap(~Experiment)  + 
+  labs(title = "Proportion of ppts not looking at responses during decision, by trial and by experiment",
+       x = "Trial",
+       y = "Proportion of ppts not looking at responses in p1") +
+  ggsave("Figures/Fig_NoRespByTrial.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+
+data_NO %>% 
+  group_by(Experiment,trial,ICU_medSplit) %>% 
+  mutate(NoLook = as.numeric(AOI_resp_p1==0)) %>%
+  summarise(mean_NoLooks = mean(NoLook,na.rm = T)) %>% # What are the NAs?
+  ggplot(aes(x = trial, y = mean_NoLooks,colour=ICU_medSplit)) +
+  geom_vline(xintercept = seq(1,72,4),color="blue",linetype="dotted") +
+  geom_vline(xintercept = seq(1,72,24),color="purple") +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_y_continuous(limits = c(0,1), breaks = seq(0,1,.1)) +
+  scale_x_continuous(breaks = seq(1,72,4)) +
+  facet_wrap(~Experiment)  + 
+  labs(title = "Proportion of ppts not looking at responses during decision, by trial and by experiment and ICU split",
+       x = "Trial",
+       y = "Proportion of ppts not looking at responses in p1") +
+  ggsave("Figures/Fig_NoRespByTrial_ICU.png", width = 24, height = 16, units = "cm", type = "cairo", dpi = 300)
+
+```
+
+# Summary
+I think that these descriptives indicate my hunch from point 1 above has some merit. These sequential effects of trial-order-within-block are undesirable in my view, as they indicate that responses in the choice data are being generated by multiple latent processes (i.e., S-R-O associations and knowledge of the dependency between trials within the block). Dependency between trials also means that i.i.d. assumptions are being violated, so standard statistical analyses that involve averaging across trials within a block to get mean number of responses per ppt aren't suitable (in theory at least, I haven't checked the robustness of methods we would be using in detail). Moreover, dependency makes the task easier, and brings performance closer to ceiling. There don't seem to be effects of PT in the choice data even when there were measured differences in attention, so making the task more difficult will hopefully increase variance in the choice data and allow for any detection of PT differences due to outcome encoding problems.   
+
+To move forward, I think we want a version of the task that preserves independence of trials, and thus means that we are only measuring associative strength in the choice data. Ideas for moving in this direction are having more blocks between instruction screens so that the contextual cue of instructions isn't as strong, and more fully randomizing stimulus presentation within a phase. Maybe we could shuffle all 24 trials within a phase rather than sampling the four cue-response pairs without replacement per block, with the exception that the same cue shouldn't be seen twice in a row. I also think that we should shuffle location of the responses, at least between phases, so that we make sure ppts are learning cue-response associations rather than (potentially easier) cue-location associations. I am less sure that location consistency is much of a problem though, as I haven't looked at accuracy by response-location.      
+
+# Table of proportions of trials in which ppts don't look at cue during decision
+
+```{r, warning = FALSE}
+data_NO %>% 
+  group_by(Experiment) %>%
+  count(AOI_cue_p1==0) %>%
+  mutate(prop = prop.table(n)) 
+  tidy() %>% 
+  kable(digits = 3)
+```
